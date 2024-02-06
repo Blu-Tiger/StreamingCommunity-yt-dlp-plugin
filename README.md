@@ -6,12 +6,12 @@ A [yt-dlp](https://github.com/yt-dlp/yt-dlp) extractor [plugin](https://github.c
 
 Requires yt-dlp `2023.01.02` or above.
 
-- Install `pycryptodomex` with:
+1) Install `pycryptodomex` with:
     ```
     pip3 install pycryptodomex
     ```
 
-- ### You can install this package with pip:
+2) You can install this package with pip:
     ```
     python3 -m pip install -U https://github.com/Blu-Tiger/StreamingCommunity-yt-dlp-plugin/archive/master.zip
     ```
