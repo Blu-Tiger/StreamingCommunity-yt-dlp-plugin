@@ -11,7 +11,7 @@ Requires yt-dlp `2023.01.02` or above.
     pip3 install pycryptodomex
     ```
 
-- You can install this package with pip:
+- ### You can install this package with pip:
     ```
     python3 -m pip install -U https://github.com/Blu-Tiger/StreamingCommunity-yt-dlp-plugin/archive/master.zip
     ```
@@ -32,5 +32,6 @@ Requires yt-dlp `2023.01.02` or above.
         - `/etc/yt-dlp/plugins/`
         - `/etc/yt-dlp-plugins/`
 
+Run yt-dlp with --verbose to check if the plugin has been loaded.
 
 See [yt-dlp installing plugins](https://github.com/yt-dlp/yt-dlp#installing-plugins) for the many other ways this plugin package can be installed.
