@@ -29,7 +29,7 @@ class StreamingCommunityIE(InfoExtractor):
             'id': '7540',
             'ext': 'mp4',
             # 'description': "",
-            'title': 'Hazbin Hotel - Ouverture',
+            'title': 'Hazbin Hotel - S01E01 - Ouverture',
             'duration': 1500,
             'series': 'Hazbin Hotel',
             'series_id': '7540',
@@ -60,6 +60,22 @@ class StreamingCommunityIE(InfoExtractor):
             #     'view_count': int,
         },
 
+    },
+    {
+        'url': 'https://streamingcommunity.li/watch/6034',
+        'md5': 'df75d007be6353835f28fba1a27d2814',
+        'info_dict': {
+            'id': '6034',
+            'ext': 'mp4',
+            'timestamp': 1673784691.0,
+            'release_date': '20230719',
+            'modified_date': '20240205',
+            'modified_timestamp': 1707130801.0,
+            'title': 'Oppenheimer',
+            'description': 'md5:c93328d3e492970ac3bec6f9fb8c4e87',
+            'upload_date': '20230115',
+            'playable_in_embed': True,
+        }
     }]
 
     def _iso8601_to_unix(self, iso8601_string):
@@ -81,36 +97,46 @@ class StreamingCommunityIE(InfoExtractor):
         video_info = json.loads(self._html_search_regex(r'window\.video[^{]+({[^<]+});',vixcloud_iframe,'iframe info'))
         tokens_url = ''
         for x,y in playlist_info.items():
-            if y and x=="token":
+            if y and x=='token':
                 tokens_url = x + '=' + y
-            if y and "token" in x:
+            if y and 'token' in x:
                 tokens_url = tokens_url + '&'+ x + '=' + y
 
         dl_url = playlist_url + '?' + tokens_url + '&expires=' + playlist_info.get('expires')
         formats = self._extract_m3u8_formats_and_subtitles(dl_url, video_id)
 
+
         video_return_dic = {
             'id': video_id,
-            'title': traverse_obj(info, ('props','title','name')) + " - " + traverse_obj(info, ('props','episode','name')),
-            'timestamp': self._iso8601_to_unix(traverse_obj(info, ('props','episode','created_at'))),
-            'modified_timestamp': self._iso8601_to_unix(traverse_obj(info, ('props','episode','updated_at'))),
-            'description': traverse_obj(info, ('props','episode','plot')),
+            'title': traverse_obj(info, ('props','title','name')),
+            'release_date' : traverse_obj(info, ('props','title','release_date')).replace('-',''),
+            'timestamp': self._iso8601_to_unix(traverse_obj(info, ('props','title','created_at'))),
+            'modified_timestamp': self._iso8601_to_unix(traverse_obj(info, ('props','title','updated_at'))),
+            'description': traverse_obj(info, ('props','title','plot')),
             'playable_in_embed': True,
             'formats': formats[0],
             'subtitles': formats[1],
-            'duration': traverse_obj(info, ('props','episode','duration'))*60,
         }
 
         if traverse_obj(info, ('props','title','type'))=='tv':
+            video_return_dic.pop('release_date')
+            SnEn = 'S' + str(traverse_obj(info, ('props','episode','season','number'))).zfill(2) + 'E' + str(traverse_obj(info, ('props','episode','number'))).zfill(2)
+            title = traverse_obj(info, ('props','title','name')) + ' - ' + SnEn + ' - ' + traverse_obj(info, ('props','episode','name'))
             video_return_dic.update({
+                'timestamp': self._iso8601_to_unix(traverse_obj(info, ('props','episode','created_at'))),
+                'modified_timestamp': self._iso8601_to_unix(traverse_obj(info, ('props','episode','updated_at'))),
+                'title': title,
+                'description': traverse_obj(info, ('props','episode','plot')),
                 'series': traverse_obj(info, ('props','title','name')),
                 'series_id': video_id,
                 'season_number': traverse_obj(info, ('props','episode','season','number')),
                 'season_id': traverse_obj(info, ('props','episode','season','id')),
                 'episode': traverse_obj(info, ('props','episode','name')),
                 'episode_number': traverse_obj(info, ('props','episode','number')),
-                'episode_id': traverse_obj(info, ('props','episode','id'))
+                'episode_id': traverse_obj(info, ('props','episode','id')),
+                'duration': traverse_obj(info, ('props','episode','duration'))*60
             })
+
 
 
         return video_return_dic
