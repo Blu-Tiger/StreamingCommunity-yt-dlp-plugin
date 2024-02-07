@@ -21,30 +21,30 @@ from yt_dlp.extractor.common import InfoExtractor
 
 
 class StreamingCommunityIE(InfoExtractor):
-    _VALID_URL = r'https?://(?:www\.)?streamingcommunity\.\w+/watch/(?P<id>\d+)'
+    _VALID_URL = r'https?://(?:www\.)?streamingcommunity\.\w+/watch/(?P<id>\d+)(\?e=\d+)?'
     _TESTS = [{
-        'url': 'https://streamingcommunity.li/watch/7540',
-        'md5': 'cfbfd17eccb0ead7d64cd432ce82b37b',
+        'url': 'https://streamingcommunity.li/watch/7540?e=50636',
+        'md5': '73c35edd689c3a1a1d93a13eb1338bc4',
         'info_dict': {
             'id': '7540',
             'ext': 'mp4',
             # 'description': "",
-            'title': 'Hazbin Hotel - S01E01 - Ouverture',
+            'title': 'Hazbin Hotel - S01E02 - La radio ha ucciso la televisione',
             'duration': 1500,
             'series': 'Hazbin Hotel',
-            'series_id': '7540',
-            'episode_id': 50635,
-            'timestamp': 1705636441.0,
-            'modified_timestamp': 1705636442.0,
+            'description': 'md5:af205da3f15380c37fec03364f55c267',
+            'episode_id': 50636,
+            'modified_timestamp': 1705636443.0,
             'season_id': 3965,
-            'modified_date': '20240119',
-            'playable_in_embed': True,
-            'description': 'md5:49cdbc07b5b6c694d00c61c9dd91d924',
-            'episode': 'Ouverture',
-            'episode_number': 1,
+            'episode': 'La radio ha ucciso la televisione',
+            'series_id': '7540',
             'season': 'Season 1',
+            'episode_number': 2,
+            'timestamp': 1705636443.0,
+            'playable_in_embed': True,
             'season_number': 1,
             'upload_date': '20240119',
+            'modified_date': '20240119',
             # 'series': '',
             # Then if the test run fails, it will output the missing/incorrect fields.
             # Properties can be added as:
@@ -103,8 +103,7 @@ class StreamingCommunityIE(InfoExtractor):
                 tokens_url = tokens_url + '&'+ x + '=' + y
 
         dl_url = playlist_url + '?' + tokens_url + '&expires=' + playlist_info.get('expires')
-        formats = self._extract_m3u8_formats_and_subtitles(dl_url, video_id)
-
+        formats, subtitles = self._extract_m3u8_formats_and_subtitles(dl_url, video_id)
 
         video_return_dic = {
             'id': video_id,
@@ -114,8 +113,8 @@ class StreamingCommunityIE(InfoExtractor):
             'modified_timestamp': self._iso8601_to_unix(traverse_obj(info, ('props','title','updated_at'))),
             'description': traverse_obj(info, ('props','title','plot')),
             'playable_in_embed': True,
-            'formats': formats[0],
-            'subtitles': formats[1],
+            'formats': formats,
+            'subtitles': subtitles,
         }
 
         if traverse_obj(info, ('props','title','type'))=='tv':
