@@ -1,4 +1,4 @@
-A [yt-dlp](https://github.com/yt-dlp/yt-dlp) extractor [plugin](https://github.com/yt-dlp/yt-dlp#plugins) for for the italian StreamingCommunity website.
+A [yt-dlp](https://github.com/yt-dlp/yt-dlp) extractor [plugin](https://github.com/yt-dlp/yt-dlp#plugins) for the italian StreamingCommunity website.
 
 ---
 
