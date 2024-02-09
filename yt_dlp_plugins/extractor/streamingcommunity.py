@@ -79,22 +79,40 @@ class StreamingCommunityIE(InfoExtractor):
     }]
 
     def _iso8601_to_unix(self, iso8601_string):
+        """
+        Converts an ISO 8601 formatted string to a Unix timestamp.
+
+        Parameters:
+        - iso8601_string (str): The ISO 8601 date-time string to convert.
+
+        Returns:
+        - float: The Unix timestamp equivalent of the input date-time string.
+        """
         datetime_obj = parser.parse(iso8601_string)
         unix_timestamp = datetime_obj.timestamp()
         return unix_timestamp
 
     def _real_extract(self, url):
+        """
+        Extracts information from the given URL of a StreamingCommunity video.
+
+        Parameters:
+        - url (str): The URL of the video to extract information from.
+
+        Returns:
+        - dict: A dictionary containing extracted video information such as ID, title, release date, timestamp, description, and more.
+        """
         video_id = self._match_id(url)
         webpage = self._download_webpage(url, video_id)
 
         info = json.loads(self._html_search_regex(r'data-page="([^"]+)',webpage,'info'))
 
         iframe = self._download_webpage(traverse_obj(info, ('props', 'embedUrl')), video_id)
-        iframeinfo = self._html_search_regex(r'<iframe[^>]+src="([^"]+)',iframe,'iframe info')
-        vixcloud_iframe = self._download_webpage(iframeinfo, video_id)
+        iframeinfo_url = self._html_search_regex(r'<iframe[^>]+src="([^"]+)',iframe,'iframe info')
+        vixcloud_iframe = self._download_webpage(iframeinfo_url, video_id)
         playlist_info = json.loads(re.sub(r',[^"]+}','}',self._html_search_regex(r'window\.masterPlaylist[^:]+params:[^{]+({[^<]+?})',vixcloud_iframe,'iframe info').replace('\'','"')))
         playlist_url = self._html_search_regex(r'window\.masterPlaylist[^<]+url:[^<]+\'([^<]+?)\'',vixcloud_iframe,'iframe info')
-        video_info = json.loads(self._html_search_regex(r'window\.video[^{]+({[^<]+});',vixcloud_iframe,'iframe info'))
+        # video_info = json.loads(self._html_search_regex(r'window\.video[^{]+({[^<]+});',vixcloud_iframe,'iframe info'))
         tokens_url = ''
         for x,y in playlist_info.items():
             if y and x=='token':
@@ -135,7 +153,5 @@ class StreamingCommunityIE(InfoExtractor):
                 'episode_id': traverse_obj(info, ('props','episode','id')),
                 'duration': traverse_obj(info, ('props','episode','duration'))*60
             })
-
-
 
         return video_return_dic
