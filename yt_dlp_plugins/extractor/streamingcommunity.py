@@ -120,7 +120,7 @@ class StreamingCommunityIE(InfoExtractor):
             if y and 'token' in x:
                 tokens_url = tokens_url + '&'+ x + '=' + y
 
-        dl_url = playlist_url + '?' + tokens_url + '&expires=' + playlist_info.get('expires')
+        dl_url = playlist_url + '?' + '&expires=' + playlist_info.get('expires')
         formats, subtitles = self._extract_m3u8_formats_and_subtitles(dl_url, video_id)
 
         video_return_dic = {
