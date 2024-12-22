@@ -55,10 +55,10 @@ class StreamingCommunityIE(InfoExtractor):
             r'window\.masterPlaylist[^<]+url:[^<]+\'([^<]+?)\'', iframe_page, 'playlist url')
         # video_info = json.loads(self._html_search_regex(r'window\.video[^{]+({[^<]+});',vixcloud_iframe,'iframe info'))
 
-        # Generate the polaylist url
+        # Generate the playlist url
         dl_url = playlist_url + ('&' if bool(re.search(r'\?[^#]+', playlist_url)) else '?') + '&expires=' + \
             playlist_params.get('expires') + '&token=' + \
-            playlist_params.get('token') + '&h=1'
+            playlist_params.get('token')
 
         formats, subtitles = self._extract_m3u8_formats_and_subtitles(
             dl_url, video_id)
