@@ -18,8 +18,9 @@ class StreamingCommunityIE(InfoExtractor):
         Returns:
         - float: The Unix timestamp equivalent of the input date-time string.
         """
-        datetime_obj = parser.parse(iso8601_string)
-        unix_timestamp = datetime_obj.timestamp()
+        # Remove 'Z' and strip milliseconds
+        cleaned = re.sub(r'(\.\d+)?Z?$', '', iso8601_string)
+        unix_timestamp = int(time.mktime(time.strptime(cleaned, "%Y-%m-%dT%H:%M:%S" if 'T' in cleaned else "%Y-%m-%d")))
         return unix_timestamp
 
     def _real_extract(self, url):
