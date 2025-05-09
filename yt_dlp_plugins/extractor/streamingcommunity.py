@@ -1,12 +1,24 @@
 import re
 import json
-from dateutil import parser
+import time
 from yt_dlp.utils.traversal import traverse_obj
 from yt_dlp.extractor.common import InfoExtractor
 
 
 class StreamingCommunityIE(InfoExtractor):
-    _VALID_URL = r'https?://(?:www\.)?streamingcommunity\.\w+/watch/(?P<id>\d+)(\?e=\d+)?'
+    _VALID_URL = r'https?://(?:www\.)?streamingcommunity\.\w+/(?:watch|titles)/(?P<id>\d+)(?:\?e=\d+)?'
+
+    def _get_title_id(self, info):
+        """
+        Extract the title ID from the info object.
+
+        Parameters:
+        - info (dict): The info object containing title data.
+
+        Returns:
+        - str: The title ID.
+        """
+        return str(traverse_obj(info, ('props', 'title', 'id')))
 
     def _iso8601_to_unix(self, iso8601_string):
         """
@@ -23,49 +35,48 @@ class StreamingCommunityIE(InfoExtractor):
         unix_timestamp = int(time.mktime(time.strptime(cleaned, "%Y-%m-%dT%H:%M:%S" if 'T' in cleaned else "%Y-%m-%d")))
         return unix_timestamp
 
-    def _real_extract(self, url):
-        """
-        Extracts information from the given URL of a StreamingCommunity video.
+    def _sanitize_filename(self, name):
+        return re.sub(r'[\\/*?:"<>|]', "", name)
 
+    def _get_domain(self, info):
+        return re.match(r'(https?://)?([^/]+)/', traverse_obj(info, ('props', 'ziggy', 'location'))).group(2)
+
+    def _get_video(self, info):
+        """
+        Extracts the video information from the given info object.
         Parameters:
-        - url (str): The URL of the video to extract information from.
-
+        - info (dict): The info object containing the StreamingCommunity video data.
         Returns:
-        - dict: A dictionary containing extracted video information such as ID, title, release date, timestamp, description, and more.
+        - dict: A dictionary containing extracted video information.
         """
-        video_id = self._match_id(url)
-        webpage = self._download_webpage(url, video_id)
-
-        # Extract information from data-page attribute
-        info = json.loads(self._html_search_regex(
-            r'data-page="([^"]+)', webpage, 'info'))
-
-        # Extract the video page url
         video_page_url = self._download_webpage(traverse_obj(
-            info, ('props', 'embedUrl')), video_id)
-
-        # Get the iframe url and iframe page
+            info, ('props', 'embedUrl')), self._get_title_id(info))# Get the iframe url and iframe page
         iframe_url = self._html_search_regex(
             r'<iframe[^>]+src\s*=\s*"([^"]+)', video_page_url, 'iframe url')
-        iframe_page = self._download_webpage(iframe_url, video_id)
+        iframe_page = self._download_webpage(iframe_url, self._get_title_id(info))
 
         # Extract the playlist params and url from the page js
         playlist_params = json.loads(re.sub(r',[^"]+}', '}', self._html_search_regex(
             r'window\.masterPlaylist[^:]+params:[^{]+({[^<]+?})', iframe_page, 'playlist params').replace('\'', '"')))
         playlist_url = self._html_search_regex(
             r'window\.masterPlaylist[^<]+url:[^<]+\'([^<]+?)\'', iframe_page, 'playlist url')
-        # video_info = json.loads(self._html_search_regex(r'window\.video[^{]+({[^<]+});',vixcloud_iframe,'iframe info'))
 
         # Generate the playlist url
-        dl_url = playlist_url + ('&' if bool(re.search(r'\?[^#]+', playlist_url)) else '?') + '&expires=' + \
-            playlist_params.get('expires') + '&token=' + \
-            playlist_params.get('token')
-
+        dl_url = playlist_url + \
+            ('&' if bool(re.search(r'\?[^#]+', playlist_url)) else '?') + \
+            '&expires=' + playlist_params.get('expires') + \
+            '&token=' + playlist_params.get('token') + \
+            '&h=1'
+        # Add headers for the request to avoid being blocked
+        headers = {
+            'Referer': iframe_url,
+            'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        }
         formats, subtitles = self._extract_m3u8_formats_and_subtitles(
-            dl_url, video_id)
+            dl_url, self._get_title_id(info), headers=headers)
 
         video_return_dic = {
-            'id': video_id,
+            'id': self._get_title_id(info),
             'title': traverse_obj(info, ('props', 'title', 'name')),
             'release_date': traverse_obj(info, ('props', 'title', 'release_date')).replace('-', ''),
             'timestamp': self._iso8601_to_unix(traverse_obj(info, ('props', 'title', 'created_at'))),
@@ -88,7 +99,7 @@ class StreamingCommunityIE(InfoExtractor):
                 'title': title,
                 'description': traverse_obj(info, ('props', 'episode', 'plot')),
                 'series': traverse_obj(info, ('props', 'title', 'name')),
-                'series_id': video_id,
+                'series_id': self._get_title_id(info),
                 'season_number': traverse_obj(info, ('props', 'episode', 'season', 'number')),
                 'season_id': traverse_obj(info, ('props', 'episode', 'season', 'id')),
                 'episode': traverse_obj(info, ('props', 'episode', 'name')),
@@ -98,3 +109,86 @@ class StreamingCommunityIE(InfoExtractor):
             })
 
         return video_return_dic
+
+    def _get_season(self, info):
+        """
+        Extracts the season information from the given info object.
+        Parameters:
+        - info (dict): The info object containing StreamingCommunity season data.
+        Returns:
+        - dict: A dictionary containing extracted season information making loop for each episode exploiting `self.url_result`.
+        """
+        def _build_watch_url(domain, title_id, episode_id=None):
+            return f"https://{domain}/watch/{title_id}" + (f"?e={episode_id}" if episode_id else "")
+
+        title = traverse_obj(info, ('props', 'title', 'name'))
+        title_id = self._get_title_id(info)
+        type = traverse_obj(info, ('props', 'title', 'type'))
+
+        domain = self._get_domain(info)
+
+        if type == 'movie':
+            # name_base = self.sanitize_filename(title)
+            movie_url = _build_watch_url(domain, title_id)
+            return self._get_video(movie_url)
+        else:
+            season = traverse_obj(info, ('props', 'loadedSeason'))
+            playlist_title = self._sanitize_filename(title) + ' - S' + str(season['number']).zfill(2)
+            if season:
+                # s_number = season['number']
+                episodes = []
+                for episode in season['episodes']:
+                    # e_number = episode['number']
+                    # name = episode['name']
+                    episode_id = episode['id']
+                    episode_url = _build_watch_url(domain, title_id, episode_id)
+                    # name_base = self.sanitize_filename(f"{title} S{str(s_number).zfill(2)}E{str(e_number).zfill(2)} {name}")
+                    episodes.append(episode_url)
+                return self.playlist_from_matches(episodes, title_id, playlist_title)
+
+    def _get_serie(self, info):
+        """
+        Extracts the series information from the given info object.
+        Parameters:
+        - info (dict): The info object containing StreamingCommunity series data.
+        Returns:
+        - dict: A dictionary containing extracted series information making loop for each season exploiting `self.url_result`.
+        """
+        def _build_season_url(domain, title_url, season_n=1):
+            SEASON_PREFIX = 'stagione-'
+            return f"https://{domain}{title_url}/{SEASON_PREFIX}{season_n}"
+
+        title = traverse_obj(info, ('props', 'title', 'name'))
+        title_id = self._get_title_id(info)
+        # type = traverse_obj(info, ('props', 'title', 'type'))
+
+        domain = self._get_domain(info)
+        title_url = traverse_obj(info, ('url'))
+        print(title_url)
+        seasons = [_build_season_url(domain, title_url, s['number']) for s in traverse_obj(info, ('props', 'title', 'seasons'))]
+        print(seasons)
+        return self.playlist_from_matches(seasons, title_id, title)
+
+
+    def _real_extract(self, url):
+        """
+        Extracts information from the given URL of a StreamingCommunity video.
+
+        Parameters:
+        - url (str): The URL of the video to extract information from.
+
+        Returns:
+        - dict: A dictionary containing extracted video information such as ID, title, release date, timestamp, description, and more.
+        """
+        media_id = self._match_id(url)
+        webpage = self._download_webpage(url, media_id)
+        info = json.loads(self._html_search_regex(
+            r'data-page="([^"]+)', webpage, 'info'))
+
+        if 'watch' in url:
+            return self._get_video(info)
+        elif 'titles' in url:
+            if 'titles' in url.rsplit('/', 2)[0]:   # a season
+                return self._get_season(info)
+            else:   # an entire series
+                return self._get_serie(info)
