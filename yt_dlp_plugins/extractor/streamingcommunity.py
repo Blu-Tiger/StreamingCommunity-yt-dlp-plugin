@@ -113,6 +113,7 @@ class StreamingCommunityIE(InfoExtractor):
     def _get_season(self, info):
         """
         Extracts the season information from the given info object.
+        Adapted from "https://forum.videohelp.com/threads/415994-need-help-with-py-script"
         Parameters:
         - info (dict): The info object containing StreamingCommunity season data.
         Returns:
