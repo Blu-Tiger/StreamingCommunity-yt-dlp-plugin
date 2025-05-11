@@ -41,6 +41,9 @@ class StreamingCommunityIE(InfoExtractor):
     def _get_domain(self, info):
         return re.match(r'(https?://)?([^/]+)/', traverse_obj(info, ('props', 'ziggy', 'location'))).group(2)
 
+    def _build_watch_url(self, domain, title_id, episode_id=None):
+            return f"https://{domain}/watch/{title_id}" + (f"?e={episode_id}" if episode_id else "")
+
     def _get_video(self, info):
         """
         Extracts the video information from the given info object.
@@ -110,6 +113,23 @@ class StreamingCommunityIE(InfoExtractor):
 
         return video_return_dic
 
+    def _get_movie(self, info):
+        """
+        Extracts the movie information from the given info object.
+        Parameters:
+        - info (dict): The info object containing StreamingCommunity movie data.
+        Returns:
+        - dict: A dictionary containing extracted movie information.
+        """
+        title = traverse_obj(info, ('props', 'title', 'name'))
+        title_id = self._get_title_id(info)
+
+        domain = self._get_domain(info)
+
+        movie_url = self._build_watch_url(domain, title_id)
+        # return self.playlist_from_matches([movie_url], title_id, title)
+        return self.url_result(movie_url)
+
     def _get_season(self, info):
         """
         Extracts the season information from the given info object.
@@ -119,33 +139,26 @@ class StreamingCommunityIE(InfoExtractor):
         Returns:
         - dict: A dictionary containing extracted season information making loop for each episode exploiting `self.url_result`.
         """
-        def _build_watch_url(domain, title_id, episode_id=None):
-            return f"https://{domain}/watch/{title_id}" + (f"?e={episode_id}" if episode_id else "")
 
         title = traverse_obj(info, ('props', 'title', 'name'))
         title_id = self._get_title_id(info)
-        type = traverse_obj(info, ('props', 'title', 'type'))
+        video_type = traverse_obj(info, ('props', 'title', 'type'))
 
         domain = self._get_domain(info)
 
-        if type == 'movie':
-            # name_base = self.sanitize_filename(title)
-            movie_url = _build_watch_url(domain, title_id)
-            return self._get_video(movie_url)
-        else:
-            season = traverse_obj(info, ('props', 'loadedSeason'))
-            playlist_title = self._sanitize_filename(title) + ' - S' + str(season['number']).zfill(2)
-            if season:
-                # s_number = season['number']
-                episodes = []
-                for episode in season['episodes']:
-                    # e_number = episode['number']
-                    # name = episode['name']
-                    episode_id = episode['id']
-                    episode_url = _build_watch_url(domain, title_id, episode_id)
-                    # name_base = self.sanitize_filename(f"{title} S{str(s_number).zfill(2)}E{str(e_number).zfill(2)} {name}")
-                    episodes.append(episode_url)
-                return self.playlist_from_matches(episodes, title_id, playlist_title)
+        season = traverse_obj(info, ('props', 'loadedSeason'))
+        playlist_title = self._sanitize_filename(title) + ' - S' + str(season['number']).zfill(2)
+        if season:
+            # s_number = season['number']
+            episodes = []
+            for episode in season['episodes']:
+                # e_number = episode['number']
+                # name = episode['name']
+                episode_id = episode['id']
+                episode_url = self._build_watch_url(domain, title_id, episode_id)
+                # name_base = self.sanitize_filename(f"{title} S{str(s_number).zfill(2)}E{str(e_number).zfill(2)} {name}")
+                episodes.append(episode_url)
+            return self.playlist_from_matches(episodes, title_id, playlist_title)
 
     def _get_serie(self, info):
         """
@@ -161,13 +174,11 @@ class StreamingCommunityIE(InfoExtractor):
 
         title = traverse_obj(info, ('props', 'title', 'name'))
         title_id = self._get_title_id(info)
-        # type = traverse_obj(info, ('props', 'title', 'type'))
+        video_type = traverse_obj(info, ('props', 'title', 'type'))
 
         domain = self._get_domain(info)
         title_url = traverse_obj(info, ('url'))
-        print(title_url)
         seasons = [_build_season_url(domain, title_url, s['number']) for s in traverse_obj(info, ('props', 'title', 'seasons'))]
-        print(seasons)
         return self.playlist_from_matches(seasons, title_id, title)
 
 
@@ -183,13 +194,16 @@ class StreamingCommunityIE(InfoExtractor):
         """
         media_id = self._match_id(url)
         webpage = self._download_webpage(url, media_id)
-        info = json.loads(self._html_search_regex(
-            r'data-page="([^"]+)', webpage, 'info'))
+        info = json.loads(self._html_search_regex(r'data-page="([^"]+)', webpage, 'info'))
 
         if 'watch' in url:
             return self._get_video(info)
         elif 'titles' in url:
-            if 'titles' in url.rsplit('/', 2)[0]:   # a season
-                return self._get_season(info)
-            else:   # an entire series
-                return self._get_serie(info)
+            video_type = traverse_obj(info, ('props', 'title', 'type'))
+            if video_type == 'movie':
+                return self._get_movie(info)
+            else:
+                if 'titles' in url.rsplit('/', 2)[0]:   # a season
+                    return self._get_season(info)
+                else:   # an entire series
+                    return self._get_serie(info)
