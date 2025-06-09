@@ -81,6 +81,15 @@ class StreamingCommunityIE(InfoExtractor):
         }
         formats, subtitles = self._extract_m3u8_formats_and_subtitles(
             dl_url, self._get_title_id(info), headers=headers)
+        
+        # Parse m3u8 subtitles
+        for lang, subtitle in subtitles.items():
+            sub_file = self._download_webpage(traverse_obj(
+                subtitle[0], ('url')), self._get_title_id(info))
+            url = next(line for line in sub_file.splitlines() if not line.startswith("#"))
+            subtitle[0]['url'] = url
+            subtitle[0]['ext'] = 'vtt'
+                     
 
         video_return_dic = {
             'id': self._get_title_id(info),
