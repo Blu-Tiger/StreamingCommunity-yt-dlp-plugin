@@ -6,7 +6,7 @@ from yt_dlp.extractor.common import InfoExtractor
 
 
 class StreamingCommunityIE(InfoExtractor):
-    _VALID_URL = r'https?://(?:www\.)?(streamingcommunity|streamingunity)\.\w+/(\w+/)*(?:watch|titles)/(?P<id>\d+)(?:\?e=\d+)?'
+    _VALID_URL = r'https?://(?:www\.)?\w*stream\w*unity\w*\.\w+/(\w+/)*(?:watch|titles)/(?P<id>\d+)(?:\?e=\d+)?'
 
     def _get_title_id(self, info):
         """
