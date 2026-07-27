@@ -3,6 +3,7 @@ import json
 import time
 from yt_dlp.utils.traversal import traverse_obj
 from yt_dlp.extractor.common import InfoExtractor
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 
 class StreamingCommunityIE(InfoExtractor):
@@ -40,12 +41,59 @@ class StreamingCommunityIE(InfoExtractor):
 
     def _get_domain(self, info):
         return re.match(r'(https?://)?([^/]+)/', traverse_obj(info, ('props', 'ziggy', 'location'))).group(2)
-        
+
     def _get_base_path(self, info):
         return re.match(r'(https?://)?([^/]+)/([^/]+)', traverse_obj(info, ('props', 'ziggy', 'location'))).group(3)
 
     def _build_watch_url(self, domain, title_id, episode_id=None, base_path=None):
         return f"https://{domain}" + (f"/{base_path}" if base_path else "") + f"/watch/{title_id}" + (f"?e={episode_id}" if episode_id else "")
+
+    def extract_js_object(self, html: str, var_name: str) -> str:
+        """Grab the raw {...} text assigned to window.<var_name> = { ... }"""
+        marker = f"window.{var_name}"
+        start = html.index(marker)
+        brace_start = html.index("{", start)
+        depth = 0
+        for i in range(brace_start, len(html)):
+            if html[i] == "{":
+                depth += 1
+            elif html[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return html[brace_start:i + 1]
+        raise ValueError(f"Unbalanced braces for {var_name}")
+
+    def js_object_to_dict(self, js_obj: str) -> dict:
+        """Convert a (simple) JS object literal string into a Python dict."""
+        s = js_obj
+        s = re.sub(r'([{,]\s*)([A-Za-z_$][\w$]*)\s*:', r'\1"\2":', s)
+        s = re.sub(r"'((?:[^'\\]|\\.)*)'", lambda m: json.dumps(m.group(1)), s)
+        s = re.sub(r",\s*([}\]])", r"\1", s)
+        return json.loads(s)
+
+    def extract_bool(self, html: str, var_name: str) -> bool:
+        marker = f"window.{var_name}"
+        idx = html.index(marker)
+        snippet = html[idx: idx + 100]
+        match = re.search(r'=\s*(true|false)', snippet)
+        return match.group(1) == "true"
+
+    def build_dl_url(self, master_playlist: dict, can_play_fhd: bool) -> str:
+        params = dict(master_playlist.get("params") or {})
+        base_url = master_playlist.get("url") or ""
+
+        params = {k: v for k, v in params.items() if v}
+
+        if can_play_fhd:
+            params["h"] = "1"
+
+        parts = urlsplit(base_url)
+        existing = dict(parse_qsl(parts.query))
+        existing.update(params)
+
+        new_query = urlencode(existing)
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+
 
     def _get_video(self, info):
         """
@@ -57,23 +105,21 @@ class StreamingCommunityIE(InfoExtractor):
         """
         video_page_url = self._download_webpage(traverse_obj(
             info, ('props', 'embedUrl')), self._get_title_id(info))
+
+        self.to_screen("Downloaded video page.")
         # Get the iframe url and iframe page
         iframe_url = self._html_search_regex(
             r'<iframe[^>]+src\s*=\s*"([^"]+)', video_page_url, 'iframe url')
         iframe_page = self._download_webpage(iframe_url, self._get_title_id(info))
+        self.to_screen("Got video iframe.")
 
-        # Extract the playlist params and url from the page js
-        playlist_params = json.loads(re.sub(r',[^"]+}', '}', self._html_search_regex(
-            r'window\.masterPlaylist[^:]+params:[^{]+({[^<]+?})', iframe_page, 'playlist params').replace('\'', '"')))
-        playlist_url = self._html_search_regex(
-            r'window\.masterPlaylist[^<]+url:[^<]+\'([^<]+?)\'', iframe_page, 'playlist url')
+        master_playlist = self.js_object_to_dict(self.extract_js_object(iframe_page, "masterPlaylist"))
+        can_play_fhd = self.extract_bool(iframe_page, "canPlayFHD")
 
         # Generate the playlist url
-        dl_url = playlist_url + \
-            ('&' if bool(re.search(r'\?[^#]+', playlist_url)) else '?') + \
-            '&expires=' + playlist_params.get('expires') + \
-            '&token=' + playlist_params.get('token') + \
-            '&h=1'
+        dl_url = self.build_dl_url(master_playlist, can_play_fhd)
+        self.to_screen("Generated download url.")
+
         # Add headers for the request to avoid being blocked
         headers = {
             'Referer': iframe_url,
@@ -81,15 +127,16 @@ class StreamingCommunityIE(InfoExtractor):
         }
         formats, subtitles = self._extract_m3u8_formats_and_subtitles(
             dl_url, self._get_title_id(info), headers=headers)
-        
+
         # Parse m3u8 subtitles
         for lang, subtitle in subtitles.items():
             sub_file = self._download_webpage(traverse_obj(
                 subtitle[0], ('url')), self._get_title_id(info))
+            self.to_screen("Downloaded subtitles page.")
             url = next(line for line in sub_file.splitlines() if not line.startswith("#"))
             subtitle[0]['url'] = url
             subtitle[0]['ext'] = 'vtt'
-                     
+
 
         video_return_dic = {
             'id': self._get_title_id(info),
@@ -208,6 +255,7 @@ class StreamingCommunityIE(InfoExtractor):
         """
         media_id = self._match_id(url)
         webpage = self._download_webpage(url, media_id)
+        self.to_screen("Downloaded webpage.")
         info = json.loads(self._html_search_regex(r'data-page="([^"]+)', webpage, 'info'))
 
         if 'watch' in url:
