@@ -103,14 +103,26 @@ class StreamingCommunityIE(InfoExtractor):
         Returns:
         - dict: A dictionary containing extracted video information.
         """
-        video_page_url = self._download_webpage(traverse_obj(
-            info, ('props', 'embedUrl')), self._get_title_id(info))
+        # Save variables separately in order to use them twice
+        site_url = f"https://{self._get_domain(info)}/"
+        ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36")
+        embed_url = traverse_obj(info, ('props', 'embedUrl'))
 
+        video_page_url = self._download_webpage(
+            embed_url, self._get_title_id(info),
+            # Add Referer url of main website
+            headers={'Referer': site_url, 'User-Agent': ua})
+        
         self.to_screen("Downloaded video page.")
         # Get the iframe url and iframe page
         iframe_url = self._html_search_regex(
             r'<iframe[^>]+src\s*=\s*"([^"]+)', video_page_url, 'iframe url')
-        iframe_page = self._download_webpage(iframe_url, self._get_title_id(info))
+        # Replace eventual "&"
+        iframe_url = iframe_url.replace('&amp;', '&')
+        iframe_page = self._download_webpage(
+            iframe_url, self._get_title_id(info),
+            headers={'Referer': embed_url, 'User-Agent': ua})
         self.to_screen("Got video iframe.")
 
         master_playlist = self.js_object_to_dict(self.extract_js_object(iframe_page, "masterPlaylist"))
